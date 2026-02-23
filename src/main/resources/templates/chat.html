@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat P2P - Redes</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; padding: 20px; }
+        .chat-container { background: white; width: 600px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 20px; }
+        .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .messages { height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; margin-bottom: 15px; background-color: #fafafa; }
+        .message { margin-bottom: 10px; padding: 8px; border-radius: 4px; background-color: #e1f5fe; width: fit-content; }
+        .message-time { font-size: 0.8em; color: #666; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; background-color: #0288d1; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0277bd; }
+        .peer-connection { background: #eee; padding: 15px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="header">
+        <h2>Chat P2P Descentralizado</h2>
+        <p>Meu Host/Porta estão no terminal!</p>
+    </div>
+
+    <div class="messages" id="messageArea">
+        <div th:each="msg : ${history}" class="message">
+            <span class="message-time" th:text="'[' + ${msg.timestamp} + ']'"></span>
+            <strong th:text="${msg.sender} + ': '"></strong>
+            <span th:text="${msg.content}"></span>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="messageInput" placeholder="Digite sua mensagem aqui..." autocomplete="off">
+        <button onclick="sendMessage()">Enviar</button>
+    </div>
+
+    <div class="peer-connection">
+        <h3>Conectar a outro Peer</h3>
+        <div class="input-group">
+            <input type="text" id="peerIp" placeholder="IP (ex: 127.0.0.1)" value="127.0.0.1">
+            <input type="text" id="peerPort" placeholder="Porta (ex: 9001)" style="flex: 0.5;">
+            <button onclick="connectToNewPeer()">Conectar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var stompClient = null;
+
+    function connectWebSocket() {
+        var socket = new SockJS('/ws'); // Aquele endpoint que criamos no WebSocketConfig
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, function (frame) {
+            console.log('Conectado ao WebSocket: ' + frame);
+
+            stompClient.subscribe('/topic/public', function (messagePayload) {
+                var message = JSON.parse(messagePayload.body);
+                showMessageOnScreen(message);
+            });
+        });
+    }
+
+    function sendMessage() {
+        var messageInput = document.getElementById('messageInput');
+        var messageContent = messageInput.value.trim();
+
+        if (messageContent && stompClient) {
+            var chatMessage = {
+                sender: 'Eu',
+                content: messageInput.value
+            };
+
+            stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
+            messageInput.value = ''; // Limpa o campo
+        }
+    }
+
+    function showMessageOnScreen(message) {
+        var messageArea = document.getElementById('messageArea');
+        var messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+
+        messageElement.innerHTML = '<span class="message-time">[' + message.timestamp + '] </span>' +
+                                   '<strong>' + message.sender + ': </strong>' +
+                                   '<span>' + message.content + '</span>';
+
+        messageArea.appendChild(messageElement);
+        messageArea.scrollTop = messageArea.scrollHeight;
+    }
+
+    function connectToNewPeer() {
+        var ip = document.getElementById('peerIp').value;
+        var port = document.getElementById('peerPort').value;
+
+        fetch('/api/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host: ip, port: parseInt(port) })
+        }).then(response => response.text())
+          .then(data => alert(data))
+          .catch(error => alert("Erro ao conectar: " + error));
+    }
+
+    connectWebSocket();
+</script>
+
+</body>
+</html>
